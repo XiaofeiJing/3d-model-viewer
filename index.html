@@ -181,7 +181,7 @@
       align-items: center;
       justify-content: center;
       background: #1a1a2e;
-      transition: opacity 0.6s ease;
+      transition: opacity 0.8s ease;
     }
 
     .loading-overlay.hidden {
@@ -202,6 +202,39 @@
       margin-top: 16px;
       color: rgba(255,255,255,0.5);
       font-size: 14px;
+    }
+
+    .loading-progress {
+      margin-top: 12px;
+      width: 200px;
+      height: 4px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .loading-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #638cff, #a0bbff);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .error-msg {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+      background: rgba(220,53,69,0.9);
+      color: #fff;
+      padding: 14px 28px;
+      border-radius: 12px;
+      font-size: 14px;
+      text-align: center;
+      max-width: 320px;
+      backdrop-filter: blur(10px);
     }
 
     @keyframes spin {
@@ -239,13 +272,14 @@
   <!-- 加载遮罩 -->
   <div class="loading-overlay" id="loadingOverlay">
     <div class="spinner"></div>
-    <div class="loading-text">正在加载 3D 模型...</div>
+    <div class="loading-text" id="loadingText">正在加载 3D 模型...</div>
+    <div class="loading-progress"><div class="loading-bar" id="loadingBar"></div></div>
   </div>
 
-  <!-- 3D 模型 -->
+  <!-- 3D 模型 - 使用 jsdelivr CDN 加速 -->
   <model-viewer
     id="modelViewer"
-    src="model.glb"
+    src="https://cdn.jsdelivr.net/gh/XiaofeiJing/3d-model-viewer@main/model.glb"
     camera-controls
     auto-rotate
     rotation-per-second="20deg"
@@ -257,6 +291,7 @@
     min-camera-orbit="auto auto 0.8m"
     max-camera-orbit="auto auto 4m"
     interpolation-decay="200"
+    reveal="auto"
   ></model-viewer>
 
   <!-- 顶部标题 -->
@@ -297,17 +332,45 @@
   <script>
     const viewer = document.getElementById('modelViewer');
     const overlay = document.getElementById('loadingOverlay');
+    const loadingText = document.getElementById('loadingText');
+    const loadingBar = document.getElementById('loadingBar');
     const btnAutoRotate = document.getElementById('btnAutoRotate');
     const btnWireframe = document.getElementById('btnWireframe');
     let wireframeMode = false;
+    let loadStartTime = Date.now();
+
+    // 加载进度
+    viewer.addEventListener('progress', (e) => {
+      if (e.total && e.total > 0) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        loadingBar.style.width = pct + '%';
+        const mbLoaded = (e.loaded / 1048576).toFixed(1);
+        const mbTotal = (e.total / 1048576).toFixed(0);
+        loadingText.textContent = `正在加载 ${mbLoaded}MB / ${mbTotal}MB (${pct}%)`;
+      } else {
+        // 模拟进度（当无法获取 total 时）
+        const elapsed = (Date.now() - loadStartTime) / 1000;
+        const estimatedPct = Math.min(90, (elapsed / 30) * 100); // 假设最多30秒
+        loadingBar.style.width = estimatedPct + '%';
+        const mbLoaded = ((elapsed * 1.5) | 0); // 粗略估算
+        loadingText.textContent = `正在加载... 约 ${mbLoaded} MB`;
+      }
+    });
 
     // 模型加载完成
     viewer.addEventListener('load', () => {
-      setTimeout(() => overlay.classList.add('hidden'), 400);
+      loadingBar.style.width = '100%';
+      loadingText.textContent = '加载完成！';
+      setTimeout(() => overlay.classList.add('hidden'), 500);
     });
 
-    // 超时自动隐藏 loading
-    setTimeout(() => overlay.classList.add('hidden'), 8000);
+    // 加载错误
+    viewer.addEventListener('error', (err) => {
+      console.error('Model load error:', err);
+      loadingText.textContent = '⚠️ 模型加载失败，请检查网络后刷新页面';
+      loadingBar.style.background = '#dc3545';
+      // 不隐藏 loading，显示错误信息
+    });
 
     // 自动旋转开关
     function toggleAutoRotate() {
